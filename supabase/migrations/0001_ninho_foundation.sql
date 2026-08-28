@@ -57,6 +57,48 @@ create table public.audit_logs (
   created_at timestamptz not null default now()
 );
 
+-- Core family data. Every record belongs to a family and is protected by RLS below.
+create table public.tasks (
+  id uuid primary key default gen_random_uuid(), family_id uuid not null references public.families(id) on delete cascade,
+  title text not null check (char_length(title) between 1 and 240), details text, due_at timestamptz,
+  assigned_to uuid references auth.users(id) on delete set null, priority text not null default 'Normal' check (priority in ('Baixa','Normal','Alta')),
+  completed boolean not null default false, created_by uuid not null references auth.users(id) on delete restrict,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now()
+);
+create table public.shopping_lists (
+  id uuid primary key default gen_random_uuid(), family_id uuid not null references public.families(id) on delete cascade,
+  name text not null check (char_length(name) between 1 and 120), created_by uuid not null references auth.users(id) on delete restrict,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now()
+);
+create table public.shopping_items (
+  id uuid primary key default gen_random_uuid(), list_id uuid not null references public.shopping_lists(id) on delete cascade,
+  label text not null check (char_length(label) between 1 and 160), checked boolean not null default false,
+  created_by uuid not null references auth.users(id) on delete restrict, created_at timestamptz not null default now(), updated_at timestamptz not null default now()
+);
+create table public.family_events (
+  id uuid primary key default gen_random_uuid(), family_id uuid not null references public.families(id) on delete cascade,
+  title text not null, starts_at timestamptz not null, ends_at timestamptz, location text, created_by uuid not null references auth.users(id) on delete restrict,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now()
+);
+create table public.finance_transactions (
+  id uuid primary key default gen_random_uuid(), family_id uuid not null references public.families(id) on delete cascade,
+  description text not null, amount numeric(12,2) not null check (amount >= 0), kind text not null check (kind in ('income','expense')),
+  category text not null default 'Outros', occurred_on date not null default current_date, created_by uuid not null references auth.users(id) on delete restrict,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now()
+);
+create table public.family_messages (
+  id uuid primary key default gen_random_uuid(), family_id uuid not null references public.families(id) on delete cascade,
+  author_id uuid not null references auth.users(id) on delete restrict, body text not null check (char_length(body) between 1 and 4000),
+  created_at timestamptz not null default now()
+);
+create table public.family_notifications (
+  id uuid primary key default gen_random_uuid(), family_id uuid not null references public.families(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade, title text not null, body text, read_at timestamptz, created_at timestamptz not null default now()
+);
+create index tasks_family_due_idx on public.tasks (family_id, due_at);
+create index events_family_start_idx on public.family_events (family_id, starts_at);
+create index messages_family_created_idx on public.family_messages (family_id, created_at);
+
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
@@ -109,6 +151,13 @@ alter table public.families enable row level security;
 alter table public.family_members enable row level security;
 alter table public.documents enable row level security;
 alter table public.audit_logs enable row level security;
+alter table public.tasks enable row level security;
+alter table public.shopping_lists enable row level security;
+alter table public.shopping_items enable row level security;
+alter table public.family_events enable row level security;
+alter table public.finance_transactions enable row level security;
+alter table public.family_messages enable row level security;
+alter table public.family_notifications enable row level security;
 
 create policy "profiles are visible to family members" on public.profiles for select using (
   id = auth.uid() or exists (select 1 from public.family_members me join public.family_members them on them.family_id = me.family_id where me.user_id = auth.uid() and them.user_id = profiles.id)
@@ -137,6 +186,20 @@ create policy "owners and admins delete documents" on public.documents for delet
 
 create policy "admins view audit logs" on public.audit_logs for select using (public.has_family_role(family_id, array['owner', 'admin']::public.family_role[]));
 create policy "members create audit logs" on public.audit_logs for insert with check (public.is_family_member(family_id) and actor_id = auth.uid());
+
+create policy "members manage tasks" on public.tasks for all using (public.is_family_member(family_id)) with check (public.is_family_member(family_id) and created_by = auth.uid());
+create policy "members manage lists" on public.shopping_lists for all using (public.is_family_member(family_id)) with check (public.is_family_member(family_id) and created_by = auth.uid());
+create policy "members manage list items" on public.shopping_items for all using (
+  exists (select 1 from public.shopping_lists l where l.id = list_id and public.is_family_member(l.family_id))
+) with check (
+  exists (select 1 from public.shopping_lists l where l.id = list_id and public.is_family_member(l.family_id)) and created_by = auth.uid()
+);
+create policy "members manage events" on public.family_events for all using (public.is_family_member(family_id)) with check (public.is_family_member(family_id) and created_by = auth.uid());
+create policy "members manage finances" on public.finance_transactions for all using (public.is_family_member(family_id)) with check (public.is_family_member(family_id) and created_by = auth.uid());
+create policy "members read messages" on public.family_messages for select using (public.is_family_member(family_id));
+create policy "members send messages" on public.family_messages for insert with check (public.is_family_member(family_id) and author_id = auth.uid());
+create policy "members read own notifications" on public.family_notifications for select using (user_id = auth.uid() and public.is_family_member(family_id));
+create policy "users update own notifications" on public.family_notifications for update using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 insert into storage.buckets (id, name, public) values ('family-documents', 'family-documents', false) on conflict (id) do nothing;
 
