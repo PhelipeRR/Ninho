@@ -31,11 +31,11 @@ export async function createFamilyInvite(familyId: string, email: string) {
 }
 
 export async function loadTasks(familyId: string): Promise<AppTask[]> {
-  const { data, error } = await supabase.from('tasks').select('id,title,due_at,priority,completed,profiles:assigned_to(display_name)').eq('family_id', familyId).order('due_at', { ascending: true });
+  const { data, error } = await supabase.from('tasks').select('id,title,due_at,priority,completed,assigned_to').eq('family_id', familyId).order('due_at', { ascending: true });
   if (error) throw error;
   return (data ?? []).map((row: any) => ({
     id: row.id, title: row.title, meta: row.due_at ? new Date(row.due_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Sem prazo',
-    person: row.profiles?.display_name ?? 'Você', tone: 'orange', done: row.completed, priority: row.priority,
+    person: row.assigned_to ? 'Membro' : 'Você', tone: 'orange', done: row.completed, priority: row.priority,
   }));
 }
 
