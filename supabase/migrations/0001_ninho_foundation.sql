@@ -1,0 +1,151 @@
+create extension if not exists pgcrypto;
+
+create type public.family_role as enum ('owner', 'admin', 'adult', 'teen', 'child', 'caregiver', 'guest');
+create type public.document_visibility as enum ('owner', 'admins', 'adults', 'selected', 'family');
+
+create table public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  display_name text,
+  avatar_path text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table public.families (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (char_length(name) between 1 and 120),
+  owner_id uuid not null references auth.users(id) on delete restrict,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table public.family_members (
+  family_id uuid not null references public.families(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  role public.family_role not null default 'adult',
+  permissions jsonb not null default '{}'::jsonb,
+  expires_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (family_id, user_id)
+);
+
+create table public.documents (
+  id uuid primary key default gen_random_uuid(),
+  family_id uuid not null references public.families(id) on delete cascade,
+  owner_id uuid not null references auth.users(id) on delete restrict,
+  storage_path text not null unique,
+  original_name text not null check (char_length(original_name) between 1 and 150),
+  mime_type text not null check (mime_type in ('application/pdf', 'image/jpeg', 'image/png', 'image/heic')),
+  size_bytes bigint not null check (size_bytes > 0 and size_bytes <= 10485760),
+  visibility public.document_visibility not null default 'owner',
+  selected_user_ids uuid[] not null default '{}',
+  deleted_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  version integer not null default 1
+);
+
+create table public.audit_logs (
+  id uuid primary key default gen_random_uuid(),
+  family_id uuid not null references public.families(id) on delete cascade,
+  actor_id uuid not null references auth.users(id) on delete restrict,
+  action text not null,
+  entity_type text not null,
+  entity_id uuid,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.profiles (id) values (new.id) on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
+
+create or replace function public.handle_new_family()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.family_members (family_id, user_id, role)
+  values (new.id, new.owner_id, 'owner')
+  on conflict (family_id, user_id) do update set role = 'owner';
+  return new;
+end;
+$$;
+
+create trigger on_family_created
+  after insert on public.families
+  for each row execute procedure public.handle_new_family();
+
+create or replace function public.is_family_member(target_family_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.family_members fm
+    where fm.family_id = target_family_id
+      and fm.user_id = auth.uid()
+      and (fm.expires_at is null or fm.expires_at > now())
+  );
+$$;
+
+create or replace function public.has_family_role(target_family_id uuid, allowed_roles public.family_role[])
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.family_members fm
+    where fm.family_id = target_family_id
+      and fm.user_id = auth.uid()
+      and fm.role = any(allowed_roles)
+      and (fm.expires_at is null or fm.expires_at > now())
+  );
+$$;
+
+alter table public.profiles enable row level security;
+alter table public.families enable row level security;
+alter table public.family_members enable row level security;
+alter table public.documents enable row level security;
+alter table public.audit_logs enable row level security;
+
+create policy "profiles are visible to family members" on public.profiles for select using (
+  id = auth.uid() or exists (select 1 from public.family_members me join public.family_members them on them.family_id = me.family_id where me.user_id = auth.uid() and them.user_id = profiles.id)
+);
+create policy "users manage their profile" on public.profiles for all using (id = auth.uid()) with check (id = auth.uid());
+
+create policy "members can view families" on public.families for select using (public.is_family_member(id));
+create policy "owners create families" on public.families for insert with check (owner_id = auth.uid());
+create policy "owners update families" on public.families for update using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+create policy "owners delete families" on public.families for delete using (owner_id = auth.uid());
+
+create policy "members view membership" on public.family_members for select using (public.is_family_member(family_id));
+create policy "owners and admins manage membership" on public.family_members for all using (public.has_family_role(family_id, array['owner', 'admin']::public.family_role[])) with check (public.has_family_role(family_id, array['owner', 'admin']::public.family_role[]));
+
+create policy "authorized members view documents" on public.documents for select using (
+  public.is_family_member(family_id) and deleted_at is null and (
+    owner_id = auth.uid() or visibility = 'family' or
+    (visibility = 'admins' and public.has_family_role(family_id, array['owner', 'admin']::public.family_role[])) or
+    (visibility = 'adults' and public.has_family_role(family_id, array['owner', 'admin', 'adult']::public.family_role[])) or
+    (visibility = 'selected' and auth.uid() = any(selected_user_ids))
+  )
+);
+create policy "members create documents" on public.documents for insert with check (public.is_family_member(family_id) and owner_id = auth.uid());
+create policy "owners and admins update documents" on public.documents for update using (owner_id = auth.uid() or public.has_family_role(family_id, array['owner', 'admin']::public.family_role[]));
+create policy "owners and admins delete documents" on public.documents for delete using (owner_id = auth.uid() or public.has_family_role(family_id, array['owner', 'admin']::public.family_role[]));
+
+create policy "admins view audit logs" on public.audit_logs for select using (public.has_family_role(family_id, array['owner', 'admin']::public.family_role[]));
+create policy "members create audit logs" on public.audit_logs for insert with check (public.is_family_member(family_id) and actor_id = auth.uid());
+
+insert into storage.buckets (id, name, public) values ('family-documents', 'family-documents', false) on conflict (id) do nothing;
+
+create policy "authorized members read document objects" on storage.objects for select using (
+  bucket_id = 'family-documents' and public.is_family_member((storage.foldername(name))[1]::uuid)
+);
+create policy "members upload document objects" on storage.objects for insert with check (
+  bucket_id = 'family-documents' and public.is_family_member((storage.foldername(name))[1]::uuid)
+);
+create policy "owners and admins delete document objects" on storage.objects for delete using (
+  bucket_id = 'family-documents' and public.has_family_role((storage.foldername(name))[1]::uuid, array['owner', 'admin']::public.family_role[])
+);
