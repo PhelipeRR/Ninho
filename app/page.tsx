@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import type { Session } from '@supabase/supabase-js';
+import { supabase } from './lib/supabase';
 
 type Task = { id: number; title: string; meta: string; person: string; tone: string; done: boolean; priority: string };
 type View = 'Visão geral' | 'Calendário' | 'Tarefas' | 'Listas' | 'Orçamento' | 'Refeições' | 'Documentos' | 'Mensagens' | 'Localização' | 'Rotinas' | 'Aniversários' | 'Família' | 'Notificações' | 'Assistente' | 'Configurações';
@@ -11,7 +13,58 @@ const members = [{ name: 'Você', initials: 'VC', color: '#e8a15a', role: 'Admin
 const initialTasks: Task[] = [{ id: 1, title: 'Levar Pedro à natação', meta: 'Hoje · 17:30', person: 'Você', tone: 'orange', done: false, priority: 'Alta' }, { id: 2, title: 'Comprar ração da Amora', meta: 'Hoje · Lista da casa', person: 'Ana', tone: 'lilac', done: false, priority: 'Normal' }, { id: 3, title: 'Separar uniforme da escola', meta: 'Amanhã · Rotina', person: 'Pedro', tone: 'mint', done: true, priority: 'Normal' }];
 const initialLists = [{ id: 1, name: 'Compras da semana', items: ['Leite', 'Bananas', 'Café em pó', 'Ração da Amora'], checked: [true, true, false, false] }, { id: 2, name: 'Churrasco de sábado', items: ['Carvão', 'Pão de alho', 'Refrigerante'], checked: [false, false, false] }];
 
-export default function Home() {
+export default function Home() { return <WebAuthGate />; }
+
+function WebAuthGate() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setLoading(false); });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  if (loading) return <div className="auth-shell"><div className="auth-card"><span className="brand-mark">n</span><p>Carregando seu Ninho…</p></div></div>;
+  if (!session) return <AuthScreen />;
+  return <HomeContent session={session} onSignOut={() => supabase.auth.signOut()} />;
+}
+
+function AuthScreen() {
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+
+  async function submit() {
+    setMessage('');
+    if (!email || !password) return setMessage('Informe e-mail e senha.');
+    setBusy(true);
+    const result = mode === 'signin'
+      ? await supabase.auth.signInWithPassword({ email, password })
+      : await supabase.auth.signUp({ email, password });
+    setBusy(false);
+    if (result.error) setMessage(result.error.message);
+    else if (mode === 'signup') setMessage('Conta criada. Confirme seu e-mail para continuar.');
+  }
+
+  async function googleLogin() {
+    setMessage('');
+    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+    if (error) setMessage(error.message);
+  }
+
+  async function recover() {
+    if (!email) return setMessage('Informe seu e-mail para receber o link.');
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/` });
+    setMessage(error ? error.message : 'Enviamos um link de recuperação para seu e-mail.');
+  }
+
+  return <main className="auth-shell"><section className="auth-card"><div className="auth-brand"><span className="brand-mark">n</span><strong>Ninho</strong></div><p className="eyebrow">ORGANIZAÇÃO FAMILIAR</p><h1>{mode === 'signin' ? 'Que bom ter você de volta.' : 'Crie seu espaço familiar.'}</h1><p className="auth-copy">Agenda, tarefas e decisões da casa em um só lugar — com seus dados protegidos.</p><button className="social-button" onClick={googleLogin}>Continuar com Google</button><div className="auth-divider"><span>ou continue com e-mail</span></div><label className="auth-label">E-mail<input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@email.com" /></label><label className="auth-label">Senha<input type="password" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Sua senha" /></label>{message && <p className="auth-message">{message}</p>}<button className="dark-button auth-submit" disabled={busy} onClick={submit}>{busy ? 'Aguarde…' : mode === 'signin' ? 'Entrar' : 'Criar conta'}</button>{mode === 'signin' && <button className="auth-link" onClick={recover}>Esqueci minha senha</button>}<p className="auth-switch">{mode === 'signin' ? 'Ainda não tem uma conta?' : 'Já tem uma conta?'} <button onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setMessage(''); }}>{mode === 'signin' ? 'Criar conta' : 'Entrar'}</button></p></section></main>;
+}
+
+function HomeContent({ session, onSignOut }: { session: Session; onSignOut: () => void }) {
   const [active, setActive] = useState<View>('Visão geral');
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [lists, setLists] = useState(initialLists);
@@ -21,8 +74,6 @@ export default function Home() {
   const [assistantPreview, setAssistantPreview] = useState('');
   const [showAll, setShowAll] = useState(false);
 
-  useEffect(() => { const saved = window.localStorage.getItem('ninho-state'); if (saved) { try { const parsed = JSON.parse(saved); setTasks(parsed.tasks ?? initialTasks); setLists(parsed.lists ?? initialLists); } catch { /* demo state remains available */ } } }, []);
-  useEffect(() => { window.localStorage.setItem('ninho-state', JSON.stringify({ tasks, lists })); }, [tasks, lists]);
   const pending = useMemo(() => tasks.filter((task) => !task.done).length, [tasks]);
   const flash = (text: string) => { setNotice(text); window.setTimeout(() => setNotice(''), 2300); };
   const toggleTask = (id: number) => setTasks((current) => current.map((task) => task.id === id ? { ...task, done: !task.done } : task));
@@ -36,7 +87,7 @@ export default function Home() {
       <nav className="nav-list" aria-label="Navegação principal">{nav.map(([icon, label]) => <NavButton key={label} icon={icon} label={label} active={active} onClick={setView} />)}</nav>
       <div className="nav-label">Mais do Ninho</div>
       {moreNav.map(([icon, label]) => <NavButton key={label} icon={icon} label={label} active={active} onClick={setView} />)}
-      <div className="sidebar-bottom"><NavButton icon="◉" label="Notificações" active={active} onClick={() => setView('Notificações')} badge="3" /><NavButton icon="⚙" label="Configurações" active={active} onClick={() => setView('Configurações')} /><div className="profile-row"><span className="avatar avatar-you">VC</span><span><strong>Vanessa Costa</strong><small>Administrador</small></span><span className="more">•••</span></div></div>
+      <div className="sidebar-bottom"><NavButton icon="◉" label="Notificações" active={active} onClick={() => setView('Notificações')} badge="3" /><NavButton icon="⚙" label="Configurações" active={active} onClick={() => setView('Configurações')} /><div className="profile-row"><span className="avatar avatar-you">{(session.user.email ?? 'VC').slice(0, 2).toUpperCase()}</span><span><strong>{session.user.email}</strong><small>Conta conectada</small></span><button className="more" aria-label="Sair" onClick={onSignOut}>↪</button></div></div>
     </aside>
     <section className="content">
       <header className="topbar"><div className="mobile-brand"><span className="brand-mark">n</span>Ninho</div><div className="breadcrumbs">Casa Oliveira <span>/</span> {active}</div><div className="top-actions"><button className="icon-button" aria-label="Pesquisar" onClick={() => flash('Busca em todas as áreas')}>⌕</button><button className="help-button" onClick={() => setView('Assistente')}>?</button><button className="invite-button" onClick={() => flash('Link de convite copiado')}>＋ Convidar</button></div></header>
