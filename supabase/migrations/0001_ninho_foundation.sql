@@ -1,7 +1,13 @@
 create extension if not exists pgcrypto;
 
-create type public.family_role as enum ('owner', 'admin', 'adult', 'teen', 'child', 'caregiver', 'guest');
-create type public.document_visibility as enum ('owner', 'admins', 'adults', 'selected', 'family');
+do $$ begin
+  create type public.family_role as enum ('owner', 'admin', 'adult', 'teen', 'child', 'caregiver', 'guest');
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create type public.document_visibility as enum ('owner', 'admins', 'adults', 'selected', 'family');
+exception when duplicate_object then null;
+end $$;
 
 create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
