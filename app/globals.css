@@ -33,3 +33,10 @@
 .auth-link,.auth-switch button { border:0; background:none; color:#47705d; cursor:pointer; font:inherit; font-weight:700; }
 .auth-link { display:block; margin:18px auto 0; font-size:12px; }
 .auth-switch { margin:28px 0 0; color:#8a938e; text-align:center; font-size:12px; }
+.setup-card { max-width:560px; }
+.invite-heading { display:flex; justify-content:space-between; align-items:end; gap:16px; margin:22px 0 10px; }
+.invite-heading span { display:grid; gap:4px; }
+.invite-heading small,.setup-note { color:#8d8a84; font-size:12px; }
+.invite-input { width:100%; margin:5px 0; padding:13px 14px; border:1px solid #dfe3dd; border-radius:10px; background:#fff; color:#263832; font:inherit; font-size:14px; outline:none; }
+.setup-note { text-align:center; margin:14px 0 0; line-height:1.5; }
+.empty-state { padding:48px; text-align:center; }

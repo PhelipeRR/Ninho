@@ -12,13 +12,22 @@ export type AppTask = {
 
 export type AppList = { id: string; name: string; items: string[]; itemIds: string[]; checked: boolean[] };
 
-export async function getOrCreateFamily(userId: string, email?: string) {
+export async function getFamily(userId: string) {
   const existing = await supabase.from('family_members').select('family_id, families(*)').eq('user_id', userId).limit(1).maybeSingle();
-  if (existing.data?.family_id) return existing.data.family_id as string;
-  const familyName = email ? `Família de ${email.split('@')[0]}` : 'Minha família';
-  const created = await supabase.rpc('create_family', { p_name: familyName });
+  if (existing.error) throw existing.error;
+  return (existing.data?.family_id as string | null) ?? null;
+}
+
+export async function createFamily(name: string) {
+  const created = await supabase.rpc('create_family', { p_name: name.trim() });
   if (created.error) throw created.error;
   return created.data as string;
+}
+
+export async function createFamilyInvite(familyId: string, email: string) {
+  const { data, error } = await supabase.from('family_invitations').insert({ family_id: familyId, email: email.trim().toLowerCase() }).select('token').single();
+  if (error) throw error;
+  return data.token as string;
 }
 
 export async function loadTasks(familyId: string): Promise<AppTask[]> {

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
-import { createTask, getOrCreateFamily, loadLists, loadTasks, seedFirstList, setTaskCompleted, type AppList, type AppTask } from './lib/family-data';
+import { createFamily, createFamilyInvite, createTask, getFamily, loadLists, loadTasks, seedFirstList, setTaskCompleted, type AppList, type AppTask } from './lib/family-data';
 
 type Task = AppTask;
 type View = 'Visão geral' | 'Calendário' | 'Tarefas' | 'Listas' | 'Orçamento' | 'Refeições' | 'Documentos' | 'Mensagens' | 'Localização' | 'Rotinas' | 'Aniversários' | 'Família' | 'Notificações' | 'Assistente' | 'Configurações';
@@ -65,6 +65,29 @@ function AuthScreen() {
   return <main className="auth-shell"><section className="auth-card"><div className="auth-brand"><span className="brand-mark">n</span><strong>Ninho</strong></div><p className="eyebrow">ORGANIZAÇÃO FAMILIAR</p><h1>{mode === 'signin' ? 'Que bom ter você de volta.' : 'Crie seu espaço familiar.'}</h1><p className="auth-copy">Agenda, tarefas e decisões da casa em um só lugar — com seus dados protegidos.</p><button className="social-button" onClick={googleLogin}>Continuar com Google</button><div className="auth-divider"><span>ou continue com e-mail</span></div><label className="auth-label">E-mail<input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@email.com" /></label><label className="auth-label">Senha<input type="password" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Sua senha" /></label>{message && <p className="auth-message">{message}</p>}<button className="dark-button auth-submit" disabled={busy} onClick={submit}>{busy ? 'Aguarde…' : mode === 'signin' ? 'Entrar' : 'Criar conta'}</button>{mode === 'signin' && <button className="auth-link" onClick={recover}>Esqueci minha senha</button>}<p className="auth-switch">{mode === 'signin' ? 'Ainda não tem uma conta?' : 'Já tem uma conta?'} <button onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setMessage(''); }}>{mode === 'signin' ? 'Criar conta' : 'Entrar'}</button></p></section></main>;
 }
 
+function FamilySetup({ userEmail, onCreated }: { userEmail: string; onCreated: () => void }) {
+  const [name, setName] = useState('');
+  const [emails, setEmails] = useState<string[]>(['']);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+
+  async function submit() {
+    if (!name.trim()) return setMessage('Informe um nome para a família.');
+    setBusy(true); setMessage('');
+    try {
+      const familyId = await createFamily(name);
+      const invites = emails.map((email) => email.trim()).filter(Boolean);
+      const links: string[] = [];
+      for (const email of invites) { const token = await createFamilyInvite(familyId, email); links.push(`${window.location.origin}/?invite=${token}`); }
+      if (links.length) await navigator.clipboard?.writeText(links.join('\n'));
+      onCreated();
+    } catch (error: any) { setMessage(error?.message ?? 'Não foi possível criar a família.'); }
+    finally { setBusy(false); }
+  }
+
+  return <main className="auth-shell"><section className="auth-card setup-card"><div className="auth-brand"><span className="brand-mark">n</span><strong>Ninho</strong></div><p className="eyebrow">PRIMEIRO ACESSO</p><h1>Crie o espaço da sua família.</h1><p className="auth-copy">Você está conectado como <strong>{userEmail}</strong>. Dê um nome à família e convide quem participa da rotina.</p><label className="auth-label">Nome da família<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Família Silva" /></label><div className="invite-heading"><span><strong>Convide pessoas</strong><small>Opcional — você também pode fazer isso depois.</small></span><button className="auth-link" onClick={() => setEmails([...emails, ''])}>+ Adicionar</button></div>{emails.map((email, index) => <input className="invite-input" key={index} type="email" value={email} onChange={(e) => setEmails(emails.map((item, i) => i === index ? e.target.value : item))} placeholder="email@exemplo.com" />)}{message && <p className="auth-message">{message}</p>}<button className="dark-button auth-submit" disabled={busy} onClick={submit}>{busy ? 'Criando…' : 'Criar família'}</button><p className="setup-note">Os convites serão registrados e os links serão copiados para você compartilhar.</p></section></main>;
+}
+
 function HomeContent({ session, onSignOut }: { session: Session; onSignOut: () => void }) {
   const [active, setActive] = useState<View>('Visão geral');
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
@@ -72,6 +95,7 @@ function HomeContent({ session, onSignOut }: { session: Session; onSignOut: () =
   const [familyId, setFamilyId] = useState<string | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
   const [dataError, setDataError] = useState(false);
+  const [needsFamilySetup, setNeedsFamilySetup] = useState(false);
   const [notice, setNotice] = useState('');
   const [composer, setComposer] = useState('');
   const [assistantText, setAssistantText] = useState('');
@@ -82,7 +106,8 @@ function HomeContent({ session, onSignOut }: { session: Session; onSignOut: () =
     let mounted = true;
     (async () => {
       try {
-        const id = await getOrCreateFamily(session.user.id, session.user.email);
+        const id = await getFamily(session.user.id);
+        if (!id) { if (mounted) { setNeedsFamilySetup(true); setDataLoading(false); } return; }
         await seedFirstList(id, session.user.id);
         const [nextTasks, nextLists] = await Promise.all([loadTasks(id), loadLists(id)]);
         if (mounted) { setFamilyId(id); setTasks(nextTasks); setLists(nextLists); }
@@ -120,7 +145,7 @@ function HomeContent({ session, onSignOut }: { session: Session; onSignOut: () =
     </aside>
     <section className="content">
       <header className="topbar"><div className="mobile-brand"><span className="brand-mark">n</span>Ninho</div><div className="breadcrumbs">Casa Oliveira <span>/</span> {active}</div><div className="top-actions"><button className="icon-button" aria-label="Pesquisar" onClick={() => flash('Busca em todas as áreas')}>⌕</button><button className="help-button" onClick={() => setView('Assistente')}>?</button><button className="invite-button" onClick={() => flash('Link de convite copiado')}>＋ Convidar</button></div></header>
-      <div className="page-wrap">{dataLoading ? <section className="panel empty-state"><h2>Preparando o espaço da sua família…</h2><p>Carregando dados protegidos do Supabase.</p></section> : dataError ? <section className="panel empty-state"><h2>Finalize a configuração do banco</h2><p>O login está funcionando, mas as tabelas do Ninho ainda não foram criadas no Supabase. Execute <code>supabase/migrations/0001_ninho_foundation.sql</code> no SQL Editor e recarregue esta página.</p></section> : active === 'Visão geral' ? <Dashboard pending={pending} tasks={tasks} toggleTask={toggleTask} setView={setView} showAll={showAll} setShowAll={setShowAll} lists={lists} flash={flash} /> : <ModuleView view={active} tasks={tasks} lists={lists} pending={pending} composer={composer} setComposer={setComposer} addTask={addTask} toggleTask={toggleTask} setView={setView} flash={flash} assistantText={assistantText} setAssistantText={setAssistantText} assistantPreview={assistantPreview} setAssistantPreview={setAssistantPreview} />}</div>
+      <div className="page-wrap">{dataLoading ? <section className="panel empty-state"><h2>Preparando o espaço da sua família…</h2><p>Carregando dados protegidos do Supabase.</p></section> : needsFamilySetup ? <FamilySetup userEmail={session.user.email ?? ''} onCreated={() => window.location.reload()} /> : dataError ? <section className="panel empty-state"><h2>Finalize a configuração do banco</h2><p>O login está funcionando, mas as tabelas do Ninho ainda não foram criadas no Supabase. Execute as migrações no SQL Editor e recarregue esta página.</p></section> : active === 'Visão geral' ? <Dashboard pending={pending} tasks={tasks} toggleTask={toggleTask} setView={setView} showAll={showAll} setShowAll={setShowAll} lists={lists} flash={flash} /> : <ModuleView view={active} tasks={tasks} lists={lists} pending={pending} composer={composer} setComposer={setComposer} addTask={addTask} toggleTask={toggleTask} setView={setView} flash={flash} assistantText={assistantText} setAssistantText={setAssistantText} assistantPreview={assistantPreview} setAssistantPreview={setAssistantPreview} />}</div>
     </section>{notice && <div className="toast">✦ &nbsp; {notice}</div>}
   </main>;
 }
