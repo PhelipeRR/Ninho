@@ -15,9 +15,10 @@ export type AppList = { id: string; name: string; items: string[]; itemIds: stri
 export async function getOrCreateFamily(userId: string, email?: string) {
   const existing = await supabase.from('family_members').select('family_id, families(*)').eq('user_id', userId).limit(1).maybeSingle();
   if (existing.data?.family_id) return existing.data.family_id as string;
-  const created = await supabase.from('families').insert({ name: email ? `Família de ${email.split('@')[0]}` : 'Minha família', owner_id: userId }).select('id').single();
+  const familyName = email ? `Família de ${email.split('@')[0]}` : 'Minha família';
+  const created = await supabase.rpc('create_family', { p_name: familyName });
   if (created.error) throw created.error;
-  return created.data.id as string;
+  return created.data as string;
 }
 
 export async function loadTasks(familyId: string): Promise<AppTask[]> {
