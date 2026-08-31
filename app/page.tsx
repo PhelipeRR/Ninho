@@ -1327,18 +1327,18 @@ function Dashboard({
 }: any) {
   const list = lists[0];
   const firstName = String(userName ?? "").trim().split(/\s+/)[0] || "você";
-  const upcomingBirthdays = [...(birthdays ?? [])]
-    .sort((a: AppBirthday, b: AppBirthday) => {
-      const today = new Date();
-      const current = (value: string) => {
-        const [, month, day] = value.slice(0, 10).split("-").map(Number);
-        const date = new Date(today.getFullYear(), month - 1, day);
-        if (date < new Date(today.getFullYear(), today.getMonth(), today.getDate()))
-          date.setFullYear(today.getFullYear() + 1);
-        return date.getTime();
-      };
-      return current(a.birthday) - current(b.birthday);
+  const currentMonth = new Date().getMonth() + 1;
+  const currentMonthName = new Intl.DateTimeFormat("pt-BR", {
+    month: "long",
+  }).format(new Date());
+  const monthBirthdays = [...(birthdays ?? [])]
+    .filter((birthday: AppBirthday) => {
+      const [, month] = birthday.birthday.slice(0, 10).split("-").map(Number);
+      return month === currentMonth;
     })
+    .sort((a: AppBirthday, b: AppBirthday) =>
+      a.birthday.slice(8, 10).localeCompare(b.birthday.slice(8, 10)),
+    )
     .slice(0, 4);
   return (
     <>
@@ -1455,12 +1455,12 @@ function Dashboard({
           <section className="panel birthday-card">
             <PanelHeading
               eyebrow="DATAS IMPORTANTES"
-              title="Aniversários"
+              title={`Aniversários de ${currentMonthName}`}
               action="Ver todos"
               onClick={() => setActive("Aniversários")}
             />
-            {upcomingBirthdays.length ? (
-              upcomingBirthdays.map((birthday: AppBirthday) => (
+            {monthBirthdays.length ? (
+              monthBirthdays.map((birthday: AppBirthday) => (
                 <div className="birthday-row" key={birthday.id}>
                   <span className="birthday-avatar">🎂</span>
                   <span>
