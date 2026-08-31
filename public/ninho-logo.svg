@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Ninho</title>
+  <desc id="desc">Um passarinho protegido por um ninho</desc>
+  <path fill="#2F473D" d="M58 91c12-29 38-49 69-49 28 0 52 14 67 37-12-2-26 2-37 13-16-13-37-18-56-8-15 8-26 20-31 35-8-8-13-18-12-28Z"/>
+  <path fill="#F6E8D4" d="M111 88c9-20 33-31 53-19 12 7 18 18 18 30l20 10-24 2c-8 15-25 23-41 19-18-5-31-23-26-42Z"/>
+  <path fill="#2F473D" d="M149 88c-3 8 0 16 8 19 7 3 16 1 20-6-2 13-14 21-26 18-12-3-18-15-14-27 2-6 7-10 12-12Z"/>
+  <path fill="#E8A15A" d="M187 94l25 9-22 7-16-6 13-10Z"/>
+  <path fill="#F3B06A" d="M31 149c22-17 47-25 75-23 37 2 71 15 111 4-6 25-25 42-51 48-38 9-82-1-135-29Z"/>
+  <path fill="none" stroke="#2F473D" stroke-linecap="round" stroke-width="13" d="M34 151c31 19 65 28 103 25 31-2 57-13 78-30"/>
+  <path fill="none" stroke="#E8A15A" stroke-linecap="round" stroke-width="13" d="M28 173c34 25 76 34 118 28 31-4 56-16 81-37"/>
+  <path fill="none" stroke="#2F473D" stroke-linecap="round" stroke-width="11" d="M44 198c32 20 70 27 108 22 28-4 51-15 70-30"/>
+</svg>

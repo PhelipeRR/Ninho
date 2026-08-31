@@ -1,5 +1,22 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "buildCommand": "npm run build:vercel"
+  "buildCommand": "npm run build:vercel",
+  "rewrites": [
+    { "source": "/visao-geral", "destination": "/" },
+    { "source": "/calendario", "destination": "/" },
+    { "source": "/tarefas", "destination": "/" },
+    { "source": "/listas", "destination": "/" },
+    { "source": "/orcamento", "destination": "/" },
+    { "source": "/refeicoes", "destination": "/" },
+    { "source": "/documentos", "destination": "/" },
+    { "source": "/mensagens", "destination": "/" },
+    { "source": "/localizacao", "destination": "/" },
+    { "source": "/rotinas", "destination": "/" },
+    { "source": "/aniversarios", "destination": "/" },
+    { "source": "/familia", "destination": "/" },
+    { "source": "/notificacoes", "destination": "/" },
+    { "source": "/assistente", "destination": "/" },
+    { "source": "/configuracoes", "destination": "/" }
+  ]
 }

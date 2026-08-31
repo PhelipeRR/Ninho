@@ -15,6 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'Ninho — a rotina da família, em um só lugar',
   description: 'Organize compromissos, tarefas e listas da família com mais leveza.',
+  icons: { icon: '/ninho-logo.svg', apple: '/ninho-logo.svg' },
 };
 
 export default function RootLayout({
