@@ -169,6 +169,14 @@ function formatDateOnly(value: string) {
   return new Intl.DateTimeFormat("pt-BR").format(new Date(year, month - 1, day));
 }
 
+function parseAmount(value: string) {
+  const compact = value.trim().replace(/\s/g, "");
+  const normalized = compact.includes(",")
+    ? compact.replace(/\./g, "").replace(",", ".")
+    : compact;
+  return Number(normalized);
+}
+
 export default function Home() {
   return <WebAuthGate />;
 }
@@ -1311,6 +1319,7 @@ function Dashboard({
   tasks,
   lists,
   events,
+  birthdays,
   members,
   pending,
   toggleTask,
@@ -1318,6 +1327,19 @@ function Dashboard({
 }: any) {
   const list = lists[0];
   const firstName = String(userName ?? "").trim().split(/\s+/)[0] || "você";
+  const upcomingBirthdays = [...(birthdays ?? [])]
+    .sort((a: AppBirthday, b: AppBirthday) => {
+      const today = new Date();
+      const current = (value: string) => {
+        const [, month, day] = value.slice(0, 10).split("-").map(Number);
+        const date = new Date(today.getFullYear(), month - 1, day);
+        if (date < new Date(today.getFullYear(), today.getMonth(), today.getDate()))
+          date.setFullYear(today.getFullYear() + 1);
+        return date.getTime();
+      };
+      return current(a.birthday) - current(b.birthday);
+    })
+    .slice(0, 4);
   return (
     <>
       <div className="welcome-row">
@@ -1428,6 +1450,28 @@ function Dashboard({
               ))
             ) : (
               <p className="empty-copy">Nenhum membro cadastrado.</p>
+            )}
+          </section>
+          <section className="panel birthday-card">
+            <PanelHeading
+              eyebrow="DATAS IMPORTANTES"
+              title="Aniversários"
+              action="Ver todos"
+              onClick={() => setActive("Aniversários")}
+            />
+            {upcomingBirthdays.length ? (
+              upcomingBirthdays.map((birthday: AppBirthday) => (
+                <div className="birthday-row" key={birthday.id}>
+                  <span className="birthday-avatar">🎂</span>
+                  <span>
+                    <strong>{birthday.name}</strong>
+                    <small>{formatDateOnly(birthday.birthday)}</small>
+                  </span>
+                  <span className="birthday-gift">✦</span>
+                </div>
+              ))
+            ) : (
+              <p className="empty-copy">Nenhum aniversário cadastrado.</p>
             )}
           </section>
           <section className="panel list-panel">
@@ -2090,7 +2134,7 @@ function BudgetView({
     setBudgetModal(true);
   }
   async function save() {
-    const value = Number(form.amount);
+    const value = parseAmount(form.amount);
     if (!form.description.trim() || value <= 0)
       return flash("Informe descrição e valor maior que zero.");
     try {
@@ -2143,7 +2187,7 @@ function BudgetView({
     }
   }
   async function saveBudget() {
-    if (!budgetCategory || Number(budgetLimit) <= 0)
+    if (!budgetCategory || parseAmount(budgetLimit) <= 0)
       return flash("Escolha uma categoria e informe um limite.");
     try {
       await upsertBudget(
@@ -2151,7 +2195,7 @@ function BudgetView({
         session.user.id,
         budgetCategory,
         monthStart,
-        Number(budgetLimit),
+        parseAmount(budgetLimit),
       );
       setBudgetEditorOpen(false);
       await refresh();
@@ -2161,12 +2205,12 @@ function BudgetView({
     }
   }
   async function saveRecurring() {
-    if (!recForm.name.trim() || Number(recForm.amount) <= 0)
+    if (!recForm.name.trim() || parseAmount(recForm.amount) <= 0)
       return flash("Preencha a conta recorrente.");
     try {
       await createRecurring(familyId, session.user.id, {
         ...recForm,
-        amount: Number(recForm.amount),
+        amount: parseAmount(recForm.amount),
         dayOfMonth: Number(recForm.dayOfMonth),
         active: true,
       });
@@ -2229,9 +2273,8 @@ function BudgetView({
             placeholder="Descrição"
           />
           <input
-            type="number"
-            min="0"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
             value={form.amount}
             onChange={(e) => setField("amount", e.target.value)}
             placeholder="Valor"
@@ -2597,9 +2640,8 @@ function BudgetView({
               <label className="auth-label">
                 Limite do mês
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   value={budgetLimit}
                   onChange={(e) => setBudgetLimit(e.target.value)}
                   placeholder="1200,00"
@@ -2653,9 +2695,8 @@ function BudgetView({
               <label className="auth-label">
                 Valor
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   value={form.amount}
                   onChange={(e) => setField("amount", e.target.value)}
                 />
@@ -2810,9 +2851,8 @@ function BudgetView({
               <label className="auth-label">
                 Valor
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   value={recForm.amount}
                   onChange={(e) =>
                     setRecForm({ ...recForm, amount: e.target.value })

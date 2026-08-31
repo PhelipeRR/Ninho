@@ -103,7 +103,10 @@ export async function loadFamilies(userId: string): Promise<AppFamily[]> {
     .order("created_at", { ascending: true });
   if (error) throw error;
   return (data ?? [])
-    .map((row: any) => ({ id: row.family_id, name: row.families?.name ?? "Minha família" }))
+    .map((row: { family_id: string; families?: { name?: string } | null }) => ({
+      id: row.family_id,
+      name: row.families?.name ?? "Minha família",
+    }))
     .filter((family, index, all) => all.findIndex((item) => item.id === family.id) === index);
 }
 
