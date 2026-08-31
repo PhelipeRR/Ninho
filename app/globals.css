@@ -2973,3 +2973,10 @@ input, select, textarea { -webkit-appearance: none; }
 @media (display-mode: standalone) and (max-width: 650px) {
   .topbar { height: calc(64px + env(safe-area-inset-top)); flex-basis: calc(64px + env(safe-area-inset-top)); }
 }
+@media (min-width: 901px) {
+  .page-wrap {
+    max-width: none;
+    padding-left: clamp(32px, 4vw, 72px);
+    padding-right: clamp(32px, 4vw, 72px);
+  }
+}
