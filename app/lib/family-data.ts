@@ -534,6 +534,7 @@ export async function loadCategories(
     "Dívidas",
     "Outros",
     "Cartão",
+    "Salario",
   ];
   const { data, error } = await supabase
     .from("finance_categories")
@@ -551,14 +552,26 @@ export async function loadCategories(
           created_by: userId,
         })),
       );
-  } else if (!data.some((category) => category.name.toLocaleLowerCase() === "cartão")) {
-    const { error: categoryError } = await supabase
-      .from("finance_categories")
-      .upsert(
-        { family_id: familyId, name: "Cartão", created_by: userId },
-        { onConflict: "family_id,name", ignoreDuplicates: true },
-      );
-    if (categoryError) throw categoryError;
+  } else {
+    const existingNames = new Set(
+      data.map((category) => category.name.toLocaleLowerCase()),
+    );
+    const missingCategories = ["Cartão", "Salario"].filter(
+      (name) => !existingNames.has(name.toLocaleLowerCase()),
+    );
+    if (missingCategories.length) {
+      const { error: categoryError } = await supabase
+        .from("finance_categories")
+        .upsert(
+          missingCategories.map((name) => ({
+            family_id: familyId,
+            name,
+            created_by: userId,
+          })),
+          { onConflict: "family_id,name", ignoreDuplicates: true },
+        );
+      if (categoryError) throw categoryError;
+    }
   }
   const categories = await supabase
     .from("finance_categories")
