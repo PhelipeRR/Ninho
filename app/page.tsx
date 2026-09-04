@@ -50,6 +50,7 @@ import {
   setShoppingItemChecked,
   setTaskCompleted,
   updateFamilyMemberRole,
+  updateTask,
   updateTransaction,
   uploadDocument,
   uploadFinanceReceipt,
@@ -733,10 +734,15 @@ function HomeContent({
     () => tasks.filter((task) => !task.done).length,
     [tasks],
   );
-  async function addTask() {
+  async function addTask(priority: "Baixa" | "Média" | "Alta" = "Média") {
     if (!familyId || !composer.trim()) return;
     try {
-      const task = await createTask(familyId, session.user.id, composer);
+      const task = await createTask(
+        familyId,
+        session.user.id,
+        composer,
+        priority,
+      );
       setTasks((current) => [...current, task]);
       setComposer("");
       void sendEmailNotification("Nova tarefa", task.title, `task-created:${task.id}`);
@@ -1084,7 +1090,7 @@ function MainView({
   pending: number;
   composer: string;
   setComposer: (value: string) => void;
-  addTask: () => Promise<void>;
+  addTask: (priority?: "Baixa" | "Média" | "Alta") => Promise<void>;
   toggleTask: (id: string) => Promise<void>;
 }) {
   return (
@@ -1113,7 +1119,7 @@ function ViewRouter({
   pending: number;
   composer: string;
   setComposer: (value: string) => void;
-  addTask: () => Promise<void>;
+  addTask: (priority?: "Baixa" | "Média" | "Alta") => Promise<void>;
   toggleTask: (id: string) => Promise<void>;
   setActive: (view: View) => void;
 }) {
@@ -1319,6 +1325,7 @@ function Dashboard({
   tasks,
   lists,
   events,
+  transactions,
   birthdays,
   members,
   pending,
@@ -1331,6 +1338,18 @@ function Dashboard({
   const currentMonthName = new Intl.DateTimeFormat("pt-BR", {
     month: "long",
   }).format(new Date());
+  const today = new Date();
+  const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const dueToday = (transactions ?? []).filter(
+    (transaction: AppTransaction) =>
+      transaction.kind === "expense" &&
+      transaction.status === "pending" &&
+      transaction.dueDate === todayDate,
+  );
+  const dueTodayTotal = dueToday.reduce(
+    (sum: number, transaction: AppTransaction) => sum + transaction.amount,
+    0,
+  );
   const monthBirthdays = [...(birthdays ?? [])]
     .filter((birthday: AppBirthday) => {
       const [, month] = birthday.birthday.slice(0, 10).split("-").map(Number);
@@ -1389,10 +1408,10 @@ function Dashboard({
               events.slice(0, 5).map((event: AppEvent) => (
                 <Event
                   key={event.id}
-                  time={new Date(event.startsAt).toLocaleTimeString("pt-BR", {
+                  time={`${new Date(event.startsAt).toLocaleDateString("pt-BR")} · ${new Date(event.startsAt).toLocaleTimeString("pt-BR", {
                     hour: "2-digit",
                     minute: "2-digit",
-                  })}
+                  })}`}
                   title={event.title}
                   tag={event.location ?? ""}
                   color="orange"
@@ -1422,6 +1441,33 @@ function Dashboard({
                 ))
             ) : (
               <p className="empty-copy">Nenhuma tarefa cadastrada.</p>
+            )}
+          </section>
+          <section className="panel bills-today-panel">
+            <PanelHeading
+              eyebrow="FINANÇAS"
+              title="Contas a pagar hoje"
+              action="Ver orçamento"
+              onClick={() => setActive("Orçamento")}
+            />
+            {dueToday.length ? (
+              <>
+                <div className="bills-today-total">
+                  <span>Total do dia</span>
+                  <strong>R$ {dueTodayTotal.toFixed(2).replace(".", ",")}</strong>
+                </div>
+                {dueToday.map((transaction: AppTransaction) => (
+                  <div className="bills-today-row" key={transaction.id}>
+                    <span>
+                      <strong>{transaction.description}</strong>
+                      <small>{transaction.category}</small>
+                    </span>
+                    <b>R$ {transaction.amount.toFixed(2).replace(".", ",")}</b>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <p className="empty-copy">Nenhuma conta vence hoje.</p>
             )}
           </section>
         </div>
@@ -1559,7 +1605,7 @@ function ConfirmModal({
     </div>
   );
 }
-function TaskRow({ task, toggleTask, onDelete }: any) {
+function TaskRow({ task, toggleTask, onDelete, onEdit }: any) {
   return (
     <div className={`task-row ${task.done ? "completed" : ""}`}>
       <button
@@ -1578,6 +1624,15 @@ function TaskRow({ task, toggleTask, onDelete }: any) {
       <span className="assignee orange">
         {task.person.slice(0, 2).toUpperCase()}
       </span>
+      {onEdit && (
+        <button
+          className="more-button"
+          onClick={() => onEdit(task)}
+          aria-label={`Editar ${task.title}`}
+        >
+          ✎
+        </button>
+      )}
       {onDelete && (
         <button
           className="more-button"
@@ -1614,6 +1669,10 @@ function TasksView({
   confirm,
 }: any) {
   const [filter, setFilter] = useState<"all" | "pending" | "done">("all");
+  const [priority, setPriority] = useState<"Baixa" | "Média" | "Alta">("Média");
+  const [editingTask, setEditingTask] = useState<AppTask | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editPriority, setEditPriority] = useState<"Baixa" | "Média" | "Alta">("Média");
   const visible = tasks.filter(
     (task: AppTask) =>
       filter === "all" || (filter === "pending" ? !task.done : task.done),
@@ -1625,6 +1684,27 @@ function TasksView({
       flash("Tarefa excluída.");
     });
   }
+  function startEdit(task: AppTask) {
+    setEditingTask(task);
+    setEditTitle(task.title);
+    setEditPriority(
+      task.priority === "Alta" || task.priority === "Baixa" ? task.priority : "Média",
+    );
+  }
+  async function saveEdit() {
+    if (!editingTask || !editTitle.trim()) return flash("Informe o título da tarefa.");
+    try {
+      await updateTask(editingTask.id, {
+        title: editTitle,
+        priority: editPriority,
+      });
+      setEditingTask(null);
+      await refresh();
+      flash("Tarefa atualizada.");
+    } catch (error: any) {
+      flash(error?.message ?? "Não foi possível atualizar a tarefa.");
+    }
+  }
   return (
     <>
       <Header eyebrow="TAREFAS" title="O que precisa acontecer." />
@@ -1633,10 +1713,21 @@ function TasksView({
           <input
             value={composer}
             onChange={(e) => setComposer(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addTask()}
+            onKeyDown={(e) => e.key === "Enter" && addTask(priority)}
             placeholder="Adicione uma tarefa real"
           />
-          <button className="dark-button" onClick={addTask}>
+          <select
+            value={priority}
+            onChange={(e) =>
+              setPriority(e.target.value as "Baixa" | "Média" | "Alta")
+            }
+            aria-label="Prioridade da tarefa"
+          >
+            <option value="Alta">Alta</option>
+            <option value="Média">Média</option>
+            <option value="Baixa">Baixa</option>
+          </select>
+          <button className="dark-button" onClick={() => addTask(priority)}>
             Adicionar
           </button>
         </div>
@@ -1666,6 +1757,7 @@ function TasksView({
               key={task.id}
               task={task}
               toggleTask={toggleTask}
+              onEdit={startEdit}
               onDelete={remove}
             />
           ))
@@ -1676,6 +1768,57 @@ function TasksView({
           />
         )}
       </section>
+      {editingTask && (
+        <div className="modal-backdrop" onClick={() => setEditingTask(null)}>
+          <section
+            className="finance-modal"
+            role="dialog"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="preview-header">
+              <div>
+                <p className="eyebrow">EDITAR TAREFA</p>
+                <h2>Atualizar tarefa</h2>
+              </div>
+              <button className="more-button" onClick={() => setEditingTask(null)}>
+                ×
+              </button>
+            </div>
+            <div className="finance-form-grid">
+              <label className="auth-label full-field">
+                Título
+                <input
+                  autoFocus
+                  value={editTitle}
+                  onChange={(event) => setEditTitle(event.target.value)}
+                />
+              </label>
+              <label className="auth-label">
+                Prioridade
+                <select
+                  value={editPriority}
+                  onChange={(event) =>
+                    setEditPriority(event.target.value as "Baixa" | "Média" | "Alta")
+                  }
+                >
+                  <option value="Alta">Alta</option>
+                  <option value="Média">Média</option>
+                  <option value="Baixa">Baixa</option>
+                </select>
+              </label>
+            </div>
+            <div className="modal-actions">
+              <button className="outline-button" onClick={() => setEditingTask(null)}>
+                Cancelar
+              </button>
+              <button className="dark-button" onClick={saveEdit}>
+                Salvar alterações
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </>
   );
 }
@@ -2083,15 +2226,22 @@ function BudgetView({
       (kindFilter === "all" || t.kind === kindFilter),
   );
   const visibleTransactions = filtered.slice(0, pageSize);
-  const categoryTotals = categories
-    .map((category: AppCategory) => ({
-      name: category.name,
+  const categoryNames = Array.from(
+    new Set([
+      ...categories.map((category: AppCategory) => category.name),
+      ...inMonth
+        .filter((t: AppTransaction) => t.kind === "expense")
+        .map((t: AppTransaction) => t.category || "Sem categoria"),
+    ]),
+  );
+  const categoryTotals = categoryNames
+    .map((categoryName: string) => ({
+      name: categoryName,
       value: inMonth
         .filter(
           (t: AppTransaction) =>
             t.kind === "expense" &&
-            t.status === "paid" &&
-            t.category === category.name,
+            (t.category || "Sem categoria") === categoryName,
         )
         .reduce((sum: number, t: AppTransaction) => sum + t.amount, 0),
     }))
@@ -2576,7 +2726,7 @@ function BudgetView({
               </div>
             ))
           ) : (
-            <p className="empty-copy">Ainda não há despesas pagas neste mês.</p>
+            <p className="empty-copy">Ainda não há despesas neste mês.</p>
           )}
         </div>
         <div className="panel finance-chart-card">

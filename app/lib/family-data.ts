@@ -194,6 +194,7 @@ export async function createTask(
   familyId: string,
   userId: string,
   title: string,
+  priority: "Baixa" | "Média" | "Alta" = "Média",
 ) {
   const { data, error } = await supabase
     .from("tasks")
@@ -201,7 +202,7 @@ export async function createTask(
       family_id: familyId,
       created_by: userId,
       title,
-      priority: "Normal",
+      priority,
     })
     .select("id,title,priority,completed")
     .single();
@@ -222,6 +223,21 @@ export async function setTaskCompleted(id: string, completed: boolean) {
   const { error } = await supabase
     .from("tasks")
     .update({ completed, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function updateTask(
+  id: string,
+  input: { title: string; priority: "Baixa" | "Média" | "Alta" },
+) {
+  const { error } = await supabase
+    .from("tasks")
+    .update({
+      title: input.title.trim(),
+      priority: input.priority,
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", id);
   if (error) throw error;
 }

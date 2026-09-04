@@ -2324,6 +2324,58 @@ h2 {
   justify-content: space-between;
   gap: 20px;
 }
+.bills-today-panel {
+  margin-top: 18px;
+}
+.bills-today-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0 12px;
+  border-bottom: 1px solid #edf0ed;
+  color: #87928b;
+  font-size: 11px;
+}
+.bills-today-total strong {
+  color: #526159;
+  font-size: 16px;
+}
+.bills-today-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid #f1f3f1;
+}
+.bills-today-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.bills-today-row span {
+  min-width: 0;
+}
+.bills-today-row strong,
+.bills-today-row small {
+  display: block;
+}
+.bills-today-row strong {
+  overflow: hidden;
+  color: #526159;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bills-today-row small {
+  margin-top: 3px;
+  color: #9ca5a0;
+  font-size: 10px;
+}
+.bills-today-row b {
+  flex-shrink: 0;
+  color: #d18751;
+  font-size: 12px;
+}
 .quick-finance .input-row {
   flex: 1;
   justify-content: flex-end;
