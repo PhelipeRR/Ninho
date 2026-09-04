@@ -11,6 +11,15 @@ export type AppTask = {
   priority: string;
 };
 
+function formatTaskMeta(dueAt: string | null) {
+  return dueAt
+    ? new Date(dueAt).toLocaleString("pt-BR", {
+        dateStyle: "short",
+        timeStyle: "short",
+      })
+    : "Sem prazo";
+}
+
 export type AppList = {
   id: string;
   name: string;
@@ -177,12 +186,7 @@ export async function loadTasks(familyId: string): Promise<AppTask[]> {
     id: row.id,
     title: row.title,
     dueAt: row.due_at,
-    meta: row.due_at
-      ? new Date(row.due_at).toLocaleString("pt-BR", {
-          dateStyle: "short",
-          timeStyle: "short",
-        })
-      : "Sem prazo",
+    meta: formatTaskMeta(row.due_at),
     person: row.assigned_to ? "Membro" : "Você",
     tone: "orange",
     done: row.completed,
@@ -195,6 +199,7 @@ export async function createTask(
   userId: string,
   title: string,
   priority: "Baixa" | "Média" | "Alta" = "Média",
+  dueAt: string | null = null,
 ) {
   const { data, error } = await supabase
     .from("tasks")
@@ -203,15 +208,16 @@ export async function createTask(
       created_by: userId,
       title,
       priority,
+      due_at: dueAt,
     })
-    .select("id,title,priority,completed")
+    .select("id,title,due_at,priority,completed")
     .single();
   if (error) throw error;
   return {
     id: data.id,
     title: data.title,
-    dueAt: null,
-    meta: "Criada agora",
+    dueAt: data.due_at,
+    meta: formatTaskMeta(data.due_at),
     person: "Você",
     tone: "orange",
     done: data.completed,
@@ -229,13 +235,18 @@ export async function setTaskCompleted(id: string, completed: boolean) {
 
 export async function updateTask(
   id: string,
-  input: { title: string; priority: "Baixa" | "Média" | "Alta" },
+  input: {
+    title: string;
+    priority: "Baixa" | "Média" | "Alta";
+    dueAt: string | null;
+  },
 ) {
   const { error } = await supabase
     .from("tasks")
     .update({
       title: input.title.trim(),
       priority: input.priority,
+      due_at: input.dueAt,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);

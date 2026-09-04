@@ -734,7 +734,10 @@ function HomeContent({
     () => tasks.filter((task) => !task.done).length,
     [tasks],
   );
-  async function addTask(priority: "Baixa" | "Média" | "Alta" = "Média") {
+  async function addTask(
+    priority: "Baixa" | "Média" | "Alta" = "Média",
+    dueAt = "",
+  ) {
     if (!familyId || !composer.trim()) return;
     try {
       const task = await createTask(
@@ -742,6 +745,7 @@ function HomeContent({
         session.user.id,
         composer,
         priority,
+        dueAt ? new Date(dueAt).toISOString() : null,
       );
       setTasks((current) => [...current, task]);
       setComposer("");
@@ -1358,7 +1362,7 @@ function Dashboard({
     .sort((a: AppBirthday, b: AppBirthday) =>
       a.birthday.slice(8, 10).localeCompare(b.birthday.slice(8, 10)),
     )
-    .slice(0, 4);
+    .slice(0, 5);
   return (
     <>
       <div className="welcome-row">
@@ -1670,9 +1674,11 @@ function TasksView({
 }: any) {
   const [filter, setFilter] = useState<"all" | "pending" | "done">("all");
   const [priority, setPriority] = useState<"Baixa" | "Média" | "Alta">("Média");
+  const [dueAt, setDueAt] = useState("");
   const [editingTask, setEditingTask] = useState<AppTask | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editPriority, setEditPriority] = useState<"Baixa" | "Média" | "Alta">("Média");
+  const [editDueAt, setEditDueAt] = useState("");
   const visible = tasks.filter(
     (task: AppTask) =>
       filter === "all" || (filter === "pending" ? !task.done : task.done),
@@ -1690,6 +1696,13 @@ function TasksView({
     setEditPriority(
       task.priority === "Alta" || task.priority === "Baixa" ? task.priority : "Média",
     );
+    setEditDueAt(
+      task.dueAt
+        ? new Date(new Date(task.dueAt).getTime() - new Date(task.dueAt).getTimezoneOffset() * 60000)
+            .toISOString()
+            .slice(0, 16)
+        : "",
+    );
   }
   async function saveEdit() {
     if (!editingTask || !editTitle.trim()) return flash("Informe o título da tarefa.");
@@ -1697,6 +1710,7 @@ function TasksView({
       await updateTask(editingTask.id, {
         title: editTitle,
         priority: editPriority,
+        dueAt: editDueAt ? new Date(editDueAt).toISOString() : null,
       });
       setEditingTask(null);
       await refresh();
@@ -1713,7 +1727,7 @@ function TasksView({
           <input
             value={composer}
             onChange={(e) => setComposer(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addTask(priority)}
+            onKeyDown={(e) => e.key === "Enter" && addTask(priority, dueAt)}
             placeholder="Adicione uma tarefa real"
           />
           <select
@@ -1727,7 +1741,13 @@ function TasksView({
             <option value="Média">Média</option>
             <option value="Baixa">Baixa</option>
           </select>
-          <button className="dark-button" onClick={() => addTask(priority)}>
+          <input
+            type="datetime-local"
+            value={dueAt}
+            onChange={(e) => setDueAt(e.target.value)}
+            aria-label="Prazo da tarefa"
+          />
+          <button className="dark-button" onClick={() => addTask(priority, dueAt)}>
             Adicionar
           </button>
         </div>
@@ -1806,6 +1826,14 @@ function TasksView({
                   <option value="Média">Média</option>
                   <option value="Baixa">Baixa</option>
                 </select>
+              </label>
+              <label className="auth-label">
+                Prazo
+                <input
+                  type="datetime-local"
+                  value={editDueAt}
+                  onChange={(event) => setEditDueAt(event.target.value)}
+                />
               </label>
             </div>
             <div className="modal-actions">
