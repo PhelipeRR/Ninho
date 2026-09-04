@@ -521,6 +521,20 @@ export async function loadCategories(
   familyId: string,
   userId: string,
 ): Promise<AppCategory[]> {
+  const defaultCategoryNames = [
+    "Moradia",
+    "Alimentação",
+    "Mercado",
+    "Transporte",
+    "Saúde",
+    "Educação",
+    "Lazer",
+    "Assinaturas",
+    "Animais",
+    "Dívidas",
+    "Outros",
+    "Cartão",
+  ];
   const { data, error } = await supabase
     .from("finance_categories")
     .select("id,name")
@@ -531,29 +545,28 @@ export async function loadCategories(
     await supabase
       .from("finance_categories")
       .insert(
-        [
-          "Moradia",
-          "Alimentação",
-          "Mercado",
-          "Transporte",
-          "Saúde",
-          "Educação",
-          "Lazer",
-          "Assinaturas",
-          "Animais",
-          "Dívidas",
-          "Outros",
-        ].map((name) => ({ family_id: familyId, name, created_by: userId })),
+        defaultCategoryNames.map((name) => ({
+          family_id: familyId,
+          name,
+          created_by: userId,
+        })),
       );
-    const seeded = await supabase
+  } else if (!data.some((category) => category.name.toLocaleLowerCase() === "cartão")) {
+    const { error: categoryError } = await supabase
       .from("finance_categories")
-      .select("id,name")
-      .eq("family_id", familyId)
-      .order("name");
-    if (seeded.error) throw seeded.error;
-    return seeded.data ?? [];
+      .upsert(
+        { family_id: familyId, name: "Cartão", created_by: userId },
+        { onConflict: "family_id,name", ignoreDuplicates: true },
+      );
+    if (categoryError) throw categoryError;
   }
-  return data;
+  const categories = await supabase
+    .from("finance_categories")
+    .select("id,name")
+    .eq("family_id", familyId)
+    .order("name");
+  if (categories.error) throw categories.error;
+  return categories.data ?? [];
 }
 export async function createCategory(
   familyId: string,

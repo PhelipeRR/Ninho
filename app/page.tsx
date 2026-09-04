@@ -2068,6 +2068,13 @@ function BudgetView({
   const due = inMonth.filter(
     (t: AppTransaction) => t.kind === "expense" && t.status === "pending",
   );
+  const dueAmount = due.reduce((sum: number, t: AppTransaction) => sum + t.amount, 0);
+  const paidBillsAmount = inMonth
+    .filter(
+      (t: AppTransaction) =>
+        t.kind === "expense" && t.status === "paid",
+    )
+    .reduce((sum: number, t: AppTransaction) => sum + t.amount, 0);
   const filtered = inMonth.filter(
     (t: AppTransaction) =>
       (!search || t.description.toLowerCase().includes(search.toLowerCase())) &&
@@ -2259,7 +2266,8 @@ function BudgetView({
           tone="lavender"
         />
         <Metric label="Despesas do mês" value={expectedExpense} tone="peach" />
-        <Metric label="Contas a vencer" value={due.length} tone="mint" />
+        <Metric label="Contas a vencer" value={dueAmount} tone="mint" />
+        <Metric label="Contas Pagas" value={paidBillsAmount} tone="lavender" />
       </div>
       <section className="panel quick-finance">
         <div>
