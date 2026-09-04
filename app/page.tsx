@@ -1396,9 +1396,6 @@ function Dashboard({
   const tasksToday = pendingTasks.filter(
     (task: AppTask) => task.dueAt && formatDateKey(new Date(task.dueAt)) === todayDate,
   );
-  const generalTasks = pendingTasks.filter(
-    (task: AppTask) => !tasksToday.some((todayTask) => todayTask.id === task.id),
-  );
   const monthBirthdays = [...(birthdays ?? [])]
     .filter((birthday: AppBirthday) => {
       const [, month] = birthday.birthday.slice(0, 10).split("-").map(Number);
@@ -1485,23 +1482,6 @@ function Dashboard({
                 ))
             ) : (
               <p className="empty-copy">Nenhuma tarefa pendente para hoje.</p>
-            )}
-          </section>
-          <section className="panel tasks-panel">
-            <PanelHeading
-              eyebrow="TAREFAS"
-              title={<>Tarefas gerais <span className="count-pill">{generalTasks.length}</span></>}
-              action="Ver todas"
-              onClick={() => setActive("Tarefas")}
-            />
-            {generalTasks.length ? (
-              generalTasks
-                .slice(0, 3)
-                .map((task: AppTask) => (
-                  <TaskRow key={task.id} task={task} toggleTask={toggleTask} />
-                ))
-            ) : (
-              <p className="empty-copy">Nenhuma tarefa geral pendente.</p>
             )}
           </section>
           <section className="panel bills-today-panel">

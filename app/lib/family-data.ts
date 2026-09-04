@@ -768,7 +768,11 @@ export async function loadNotes(familyId: string): Promise<AppNote[]> {
     .select("id,title,body,created_by,created_at,updated_at")
     .eq("family_id", familyId)
     .order("updated_at", { ascending: false });
-  if (error) throw error;
+  if (error) {
+    // Keep older production databases usable until the notes migration is applied.
+    if (error.code === "42P01" || error.message.includes("family_notes")) return [];
+    throw error;
+  }
   return (data ?? []).map((row: any) => ({
     id: row.id,
     title: row.title,
