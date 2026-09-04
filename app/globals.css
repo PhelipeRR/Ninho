@@ -237,9 +237,9 @@ button {
   display: none;
 }
 .page-wrap {
-  max-width: 1240px;
+  max-width: 1400px;
   margin: auto;
-  padding: 48px 5.3vw 60px;
+  padding: 48px 3vw 60px;
 }
 .welcome-row {
   display: flex;
@@ -366,7 +366,7 @@ h2 {
 }
 .dashboard-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.65fr) minmax(280px, 0.85fr);
+  grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr);
   gap: 18px;
 }
 .main-column,
@@ -1286,6 +1286,69 @@ h2 {
   display: flex;
   flex-direction: column;
   min-height: 520px;
+}
+.notes-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.notes-editor .panel-heading {
+  margin-bottom: 4px;
+}
+.notes-editor input,
+.notes-editor textarea {
+  width: 100%;
+  border: 1px solid #e3e7e2;
+  border-radius: 8px;
+  padding: 11px;
+  outline: none;
+  color: #526159;
+  font-size: 12px;
+  background: #fff;
+}
+.notes-editor textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+.notes-editor .dark-button {
+  align-self: flex-start;
+}
+.notes-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.note-card {
+  min-height: 170px;
+}
+.note-card-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.note-card-header h2 {
+  overflow-wrap: anywhere;
+}
+.note-card-header > div {
+  display: flex;
+  flex-shrink: 0;
+  gap: 3px;
+}
+.note-card > p {
+  color: #66756d;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.note-card > small {
+  display: block;
+  margin-top: 18px;
+  color: #a0aaa4;
+  font-size: 9px;
 }
 .chat-head {
   display: flex;
@@ -2508,6 +2571,9 @@ h2 {
   resize: vertical;
 }
 @media (max-width: 900px) {
+  .notes-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .finance-metrics {
     grid-template-columns: repeat(3, 1fr);
   }
@@ -2524,6 +2590,9 @@ h2 {
   }
 }
 @media (max-width: 650px) {
+  .notes-grid {
+    grid-template-columns: 1fr;
+  }
   .module-header {
     align-items: start;
     flex-direction: column;

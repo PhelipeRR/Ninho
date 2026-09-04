@@ -13,6 +13,7 @@ import {
   createFamilyInvite,
   createMeal,
   createMessage,
+  createNote,
   createRecurring,
   createRoutine,
   createShoppingItem,
@@ -24,6 +25,7 @@ import {
   deleteEvent,
   deleteMeal,
   deleteMessage,
+  deleteNote,
   deleteRoutine,
   deleteShoppingItem,
   deleteShoppingList,
@@ -40,6 +42,7 @@ import {
   loadMeals,
   loadMembers,
   loadMessages,
+  loadNotes,
   loadNotifications,
   loadRecurring,
   loadRoutines,
@@ -50,6 +53,7 @@ import {
   setShoppingItemChecked,
   setTaskCompleted,
   updateFamilyMemberRole,
+  updateNote,
   updateTask,
   updateTransaction,
   uploadDocument,
@@ -65,6 +69,7 @@ import {
   type AppMeal,
   type AppMember,
   type AppMessage,
+  type AppNote,
   type AppNotification,
   type AppRecurring,
   type AppRoutine,
@@ -81,6 +86,7 @@ type View =
   | "Refeições"
   | "Documentos"
   | "Mensagens"
+  | "Notas"
   | "Localização"
   | "Rotinas"
   | "Aniversários"
@@ -120,6 +126,7 @@ const nav: [string, View][] = [
 const moreNav: [string, View][] = [
   ["♧", "Rotinas"],
   ["★", "Aniversários"],
+  ["✎", "Notas"],
 ];
 
 const viewRoutes: Record<View, string> = {
@@ -131,6 +138,7 @@ const viewRoutes: Record<View, string> = {
   Refeições: "/refeicoes",
   Documentos: "/documentos",
   Mensagens: "/mensagens",
+  Notas: "/notas",
   Localização: "/localizacao",
   Rotinas: "/rotinas",
   Aniversários: "/aniversarios",
@@ -428,6 +436,7 @@ type DataProps = {
   recurring: AppRecurring[];
   budgets: AppBudget[];
   messages: AppMessage[];
+  notes: AppNote[];
   members: AppMember[];
   documents: AppDocument[];
   meals: AppMeal[];
@@ -475,6 +484,7 @@ function HomeContent({
   const [recurring, setRecurring] = useState<AppRecurring[]>([]);
   const [budgets, setBudgets] = useState<AppBudget[]>([]);
   const [messages, setMessages] = useState<AppMessage[]>([]);
+  const [notes, setNotes] = useState<AppNote[]>([]);
   const [members, setMembers] = useState<AppMember[]>([]);
   const [documents, setDocuments] = useState<AppDocument[]>([]);
   const [meals, setMeals] = useState<AppMeal[]>([]);
@@ -523,7 +533,7 @@ function HomeContent({
     )
       .toISOString()
       .slice(0, 10);
-    const [t, l, e, tx, c, rr, bb, m, mm, d, ml, r, b, n] = await Promise.all([
+    const [t, l, e, tx, c, rr, bb, m, nt, mm, d, ml, r, b, n] = await Promise.all([
       loadTasks(id),
       loadLists(id),
       loadEvents(id),
@@ -532,6 +542,7 @@ function HomeContent({
       loadRecurring(id),
       loadBudgets(id, monthStart),
       loadMessages(id),
+      loadNotes(id),
       loadMembers(id),
       loadDocuments(id),
       loadMeals(id),
@@ -547,6 +558,7 @@ function HomeContent({
     setRecurring(rr);
     setBudgets(bb);
     setMessages(m);
+    setNotes(nt);
     setMembers(mm);
     setDocuments(d);
     setMeals(ml);
@@ -615,6 +627,16 @@ function HomeContent({
           event: "*",
           schema: "public",
           table: "tasks",
+          filter: `family_id=eq.${familyId}`,
+        },
+        () => refresh(familyId),
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "family_notes",
           filter: `family_id=eq.${familyId}`,
         },
         () => refresh(familyId),
@@ -855,6 +877,7 @@ function HomeContent({
     recurring,
     budgets,
     messages,
+    notes,
     members,
     documents,
     meals,
@@ -1158,6 +1181,7 @@ function ViewRouter({
     return (
       <MessagesView {...props} composer={composer} setComposer={setComposer} />
     );
+  if (view === "Notas") return <NotesView {...props} />;
   if (view === "Documentos") return <DocumentsView {...props} />;
   if (view === "Família") return <FamilyView {...props} />;
   if (view === "Refeições")
@@ -3177,6 +3201,116 @@ function Metric({ label, value, tone }: any) {
       <small>{label}</small>
       <strong>R$ {Number(value).toFixed(2).replace(".", ",")}</strong>
     </div>
+  );
+}
+
+function NotesView({
+  notes,
+  familyId,
+  session,
+  refresh,
+  flash,
+  confirm,
+}: any) {
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  function edit(note: AppNote) {
+    setEditingId(note.id);
+    setTitle(note.title);
+    setBody(note.body);
+  }
+  function clearForm() {
+    setEditingId(null);
+    setTitle("");
+    setBody("");
+  }
+  async function save() {
+    if (!title.trim()) return flash("Informe um título para a nota.");
+    try {
+      if (editingId) await updateNote(editingId, title, body);
+      else await createNote(familyId, session.user.id, title, body);
+      clearForm();
+      await refresh();
+      flash(editingId ? "Nota atualizada." : "Nota criada.");
+    } catch (error: any) {
+      flash(error?.message ?? "Não foi possível salvar a nota.");
+    }
+  }
+  function remove(note: AppNote) {
+    confirm("Excluir “" + note.title + "”? ", async () => {
+      await deleteNote(note.id);
+      await refresh();
+      flash("Nota excluída.");
+    });
+  }
+  return (
+    <>
+      <Header eyebrow="NOTAS" title="Ideias e lembretes da família." />
+      <section className="panel notes-editor">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">{editingId ? "EDITAR NOTA" : "NOVA NOTA"}</p>
+            <h2>{editingId ? "Atualizar nota" : "Escreva uma nota"}</h2>
+          </div>
+          {editingId && (
+            <button className="text-button" onClick={clearForm}>
+              Cancelar
+            </button>
+          )}
+        </div>
+        <input
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder="Título da nota"
+        />
+        <textarea
+          value={body}
+          onChange={(event) => setBody(event.target.value)}
+          placeholder="Escreva aqui..."
+        />
+        <button className="dark-button" onClick={save}>
+          {editingId ? "Salvar alterações" : "Adicionar nota"}
+        </button>
+      </section>
+      <section className="notes-grid">
+        {notes.length ? (
+          notes.map((note: AppNote) => (
+            <article className="panel note-card" key={note.id}>
+              <div className="note-card-header">
+                <h2>{note.title}</h2>
+                <div>
+                  <button
+                    className="more-button"
+                    onClick={() => edit(note)}
+                    aria-label={"Editar " + note.title}
+                  >
+                    ✎
+                  </button>
+                  <button
+                    className="more-button"
+                    onClick={() => remove(note)}
+                    aria-label={"Excluir " + note.title}
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+              <p>{note.body || "Nota sem conteúdo."}</p>
+              <small>
+                Atualizada em {new Date(note.updatedAt).toLocaleString("pt-BR")}
+              </small>
+            </article>
+          ))
+        ) : (
+          <Empty
+            title="Nenhuma nota ainda"
+            detail="Crie uma nota para guardar informações importantes."
+          />
+        )}
+      </section>
+    </>
   );
 }
 

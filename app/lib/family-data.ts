@@ -79,6 +79,14 @@ export type AppMessage = {
   authorId: string;
   createdAt: string;
 };
+export type AppNote = {
+  id: string;
+  title: string;
+  body: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+};
 export type AppMember = {
   userId: string;
   displayName: string;
@@ -751,6 +759,67 @@ export async function deleteMessage(id: string) {
     .from("family_messages")
     .delete()
     .eq("id", id);
+  if (error) throw error;
+}
+
+export async function loadNotes(familyId: string): Promise<AppNote[]> {
+  const { data, error } = await supabase
+    .from("family_notes")
+    .select("id,title,body,created_by,created_at,updated_at")
+    .eq("family_id", familyId)
+    .order("updated_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    title: row.title,
+    body: row.body,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
+}
+
+export async function createNote(
+  familyId: string,
+  userId: string,
+  title: string,
+  body: string,
+) {
+  const { data, error } = await supabase
+    .from("family_notes")
+    .insert({
+      family_id: familyId,
+      created_by: userId,
+      title: title.trim(),
+      body: body.trim(),
+    })
+    .select("id,title,body,created_by,created_at,updated_at")
+    .single();
+  if (error) throw error;
+  return {
+    id: data.id,
+    title: data.title,
+    body: data.body,
+    createdBy: data.created_by,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  } satisfies AppNote;
+}
+
+export async function updateNote(id: string, title: string, body: string) {
+  const { error } = await supabase
+    .from("family_notes")
+    .update({
+      title: title.trim(),
+      body: body.trim(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteNote(id: string) {
+  const { error } = await supabase.from("family_notes").delete().eq("id", id);
   if (error) throw error;
 }
 
