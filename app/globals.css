@@ -2381,6 +2381,9 @@ h2 {
   color: #d18751;
   font-size: 12px;
 }
+.dashboard-month-summary h2 {
+  margin: 4px 0 18px;
+}
 .quick-finance .input-row {
   flex: 1;
   justify-content: flex-end;

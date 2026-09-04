@@ -170,6 +170,10 @@ function formatDateOnly(value: string) {
   return new Intl.DateTimeFormat("pt-BR").format(new Date(year, month - 1, day));
 }
 
+function formatDateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 function parseAmount(value: string) {
   const compact = value.trim().replace(/\s/g, "");
   const normalized = compact.includes(",")
@@ -1343,7 +1347,17 @@ function Dashboard({
     month: "long",
   }).format(new Date());
   const today = new Date();
-  const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const todayDate = formatDateKey(today);
+  const monthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+  const monthTransactions = (transactions ?? []).filter(
+    (transaction: AppTransaction) => transaction.purchaseDate?.startsWith(monthKey),
+  );
+  const monthIncome = monthTransactions
+    .filter((transaction: AppTransaction) => transaction.kind === "income")
+    .reduce((sum: number, transaction: AppTransaction) => sum + transaction.amount, 0);
+  const monthExpenses = monthTransactions
+    .filter((transaction: AppTransaction) => transaction.kind === "expense")
+    .reduce((sum: number, transaction: AppTransaction) => sum + transaction.amount, 0);
   const dueToday = (transactions ?? []).filter(
     (transaction: AppTransaction) =>
       transaction.kind === "expense" &&
@@ -1353,6 +1367,13 @@ function Dashboard({
   const dueTodayTotal = dueToday.reduce(
     (sum: number, transaction: AppTransaction) => sum + transaction.amount,
     0,
+  );
+  const pendingTasks = (tasks ?? []).filter((task: AppTask) => !task.done);
+  const tasksToday = pendingTasks.filter(
+    (task: AppTask) => task.dueAt && formatDateKey(new Date(task.dueAt)) === todayDate,
+  );
+  const generalTasks = pendingTasks.filter(
+    (task: AppTask) => !tasksToday.some((todayTask) => todayTask.id === task.id),
   );
   const monthBirthdays = [...(birthdays ?? [])]
     .filter((birthday: AppBirthday) => {
@@ -1428,23 +1449,35 @@ function Dashboard({
           <section className="panel tasks-panel">
             <PanelHeading
               eyebrow="TAREFAS"
-              title={
-                <>
-                  Tarefas pendentes{" "}
-                  <span className="count-pill">{pending}</span>
-                </>
-              }
+              title={<>Tarefas do dia <span className="count-pill">{tasksToday.length}</span></>}
               action="Ver todas"
               onClick={() => setActive("Tarefas")}
             />
-            {tasks.length ? (
-              tasks
+            {tasksToday.length ? (
+              tasksToday
                 .slice(0, 3)
                 .map((task: AppTask) => (
                   <TaskRow key={task.id} task={task} toggleTask={toggleTask} />
                 ))
             ) : (
-              <p className="empty-copy">Nenhuma tarefa cadastrada.</p>
+              <p className="empty-copy">Nenhuma tarefa pendente para hoje.</p>
+            )}
+          </section>
+          <section className="panel tasks-panel">
+            <PanelHeading
+              eyebrow="TAREFAS"
+              title={<>Tarefas gerais <span className="count-pill">{generalTasks.length}</span></>}
+              action="Ver todas"
+              onClick={() => setActive("Tarefas")}
+            />
+            {generalTasks.length ? (
+              generalTasks
+                .slice(0, 3)
+                .map((task: AppTask) => (
+                  <TaskRow key={task.id} task={task} toggleTask={toggleTask} />
+                ))
+            ) : (
+              <p className="empty-copy">Nenhuma tarefa geral pendente.</p>
             )}
           </section>
           <section className="panel bills-today-panel">
@@ -1476,6 +1509,30 @@ function Dashboard({
           </section>
         </div>
         <aside className="right-column">
+          <section className="panel dashboard-month-summary">
+            <p className="eyebrow">RESUMO DO MÊS</p>
+            <h2>Receitas x despesas</h2>
+            <div className="chart-summary">
+              <div>
+                <span>Receitas</span>
+                <strong className="positive">
+                  R$ {monthIncome.toFixed(2).replace(".", ",")}
+                </strong>
+              </div>
+              <div>
+                <span>Despesas</span>
+                <strong className="negative">
+                  R$ {monthExpenses.toFixed(2).replace(".", ",")}
+                </strong>
+              </div>
+              <div>
+                <span>Saldo previsto</span>
+                <strong>
+                  R$ {(monthIncome - monthExpenses).toFixed(2).replace(".", ",")}
+                </strong>
+              </div>
+            </div>
+          </section>
           <section className="panel family-panel">
             <PanelHeading
               eyebrow="NA FAMÍLIA"
