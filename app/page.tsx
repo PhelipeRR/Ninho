@@ -2710,6 +2710,7 @@ function BudgetView({
         <div className="finance-table">
           <div className="finance-table-head">
             <span>Data</span>
+            <span>Vencimento</span>
             <span>Descrição</span>
             <span>Categoria</span>
             <span>Responsável</span>
@@ -2724,6 +2725,13 @@ function BudgetView({
                   {new Date(`${t.purchaseDate}T12:00:00`).toLocaleDateString(
                     "pt-BR",
                   )}
+                </span>
+                <span>
+                  {t.dueDate
+                    ? new Date(`${t.dueDate}T12:00:00`).toLocaleDateString(
+                        "pt-BR",
+                      )
+                    : "—"}
                 </span>
                 <strong>{t.description}</strong>
                 <span>{t.category}</span>
