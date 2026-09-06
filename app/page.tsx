@@ -2282,9 +2282,74 @@ function BudgetView({
     notes: "",
   });
   const monthStart = `${month}-01`;
-  const inMonth = transactions.filter((t: AppTransaction) =>
-    t.purchaseDate?.startsWith(month),
-  );
+  function dateOnly(value: string) {
+    const [year, monthNumber, day] = value.slice(0, 10).split("-").map(Number);
+    return new Date(year, monthNumber - 1, day);
+  }
+  function dateKey(date: Date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  }
+  function daysInMonth(year: number, monthNumber: number) {
+    return new Date(year, monthNumber, 0).getDate();
+  }
+  function recurringTransactionsForMonth() {
+    const [year, monthNumber] = month.split("-").map(Number);
+    const firstDay = new Date(year, monthNumber - 1, 1);
+    const lastDay = new Date(year, monthNumber, 0);
+    const projected: AppTransaction[] = [];
+
+    recurring.forEach((item: AppRecurring) => {
+      if (!item.active) return;
+      const nextDue = dateOnly(item.nextDue);
+      const recurrence = item.recurrence || "monthly";
+      const category = categories.find(
+        (candidate: AppCategory) => candidate.id === item.categoryId,
+      )?.name ?? "Outros";
+      const addOccurrence = (date: Date) => {
+        if (date < nextDue || date < firstDay || date > lastDay) return;
+        projected.push({
+          id: `recurring-${item.id}-${dateKey(date)}`,
+          description: item.name,
+          amount: item.amount,
+          kind: item.kind,
+          category,
+          occurredOn: dateKey(date),
+          purchaseDate: dateKey(date),
+          dueDate: dateKey(date),
+          status: "pending",
+          paymentMethod: item.paymentMethod,
+          paidBy: item.payerId,
+          recurrence,
+          notes: item.notes,
+          receiptPath: null,
+        });
+      };
+
+      if (recurrence === "weekly") {
+        const firstOccurrence = new Date(nextDue);
+        while (firstOccurrence <= lastDay) {
+          addOccurrence(new Date(firstOccurrence));
+          firstOccurrence.setDate(firstOccurrence.getDate() + 7);
+        }
+      } else if (recurrence === "yearly") {
+        if (year >= nextDue.getFullYear()) {
+          const day = Math.min(
+            nextDue.getDate(),
+            daysInMonth(year, nextDue.getMonth() + 1),
+          );
+          addOccurrence(new Date(year, nextDue.getMonth(), day));
+        }
+      } else {
+        const day = Math.min(item.dayOfMonth, lastDay.getDate());
+        addOccurrence(new Date(year, monthNumber - 1, day));
+      }
+    });
+    return projected;
+  }
+  const inMonth = [
+    ...transactions.filter((t: AppTransaction) => t.purchaseDate?.startsWith(month)),
+    ...recurringTransactionsForMonth(),
+  ];
   const incomePaid = inMonth
     .filter((t: AppTransaction) => t.kind === "income" && t.status === "paid")
     .reduce((s: number, t: AppTransaction) => s + t.amount, 0);
@@ -2646,13 +2711,15 @@ function BudgetView({
                     · R$ {t.amount.toFixed(2).replace(".", ",")}
                   </small>
                 </p>
-                <button
-                  className="more-button"
-                  onClick={() => edit(t)}
-                  aria-label={`Editar ${t.description}`}
-                >
-                  ✎
-                </button>
+                {!t.id.startsWith("recurring-") && (
+                  <button
+                    className="more-button"
+                    onClick={() => edit(t)}
+                    aria-label={`Editar ${t.description}`}
+                  >
+                    ✎
+                  </button>
+                )}
               </div>
             ))
           ) : (
@@ -2733,7 +2800,10 @@ function BudgetView({
                       )
                     : "—"}
                 </span>
-                <strong>{t.description}</strong>
+                <strong>
+                  {t.description}
+                  {t.id.startsWith("recurring-") && <small> · Recorrente</small>}
+                </strong>
                 <span>{t.category}</span>
                 <span>
                   {members.find((m: AppMember) => m.userId === t.paidBy)
@@ -2749,15 +2819,19 @@ function BudgetView({
                   {t.amount.toFixed(2).replace(".", ",")}
                 </span>
                 <span className="finance-row-actions">
-                  <button onClick={() => edit(t)} aria-label="Editar">
-                    ✎
-                  </button>
-                  <button onClick={() => duplicate(t)} aria-label="Duplicar">
-                    ⧉
-                  </button>
-                  <button onClick={() => remove(t)} aria-label="Excluir">
-                    ×
-                  </button>
+                  {!t.id.startsWith("recurring-") && (
+                    <>
+                      <button onClick={() => edit(t)} aria-label="Editar">
+                        ✎
+                      </button>
+                      <button onClick={() => duplicate(t)} aria-label="Duplicar">
+                        ⧉
+                      </button>
+                      <button onClick={() => remove(t)} aria-label="Excluir">
+                        ×
+                      </button>
+                    </>
+                  )}
                 </span>
               </div>
             ))
