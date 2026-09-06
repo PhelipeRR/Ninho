@@ -2344,6 +2344,43 @@ function BudgetView({
         addOccurrence(new Date(year, monthNumber - 1, day));
       }
     });
+
+    // Lançamentos criados diretamente com o campo "Recorrência" também
+    // precisam gerar as próximas ocorrências, mesmo sem um cadastro em
+    // finance_recurring.
+    transactions.forEach((source: AppTransaction) => {
+      if (!source.recurrence || source.recurrence === "") return;
+      const sourceDate = dateOnly(source.purchaseDate);
+      const recurrence = source.recurrence;
+      const addOccurrence = (date: Date) => {
+        if (date <= sourceDate || date < firstDay || date > lastDay) return;
+        projected.push({
+          ...source,
+          id: `transaction-recurring-${source.id}-${dateKey(date)}`,
+          purchaseDate: dateKey(date),
+          occurredOn: dateKey(date),
+          dueDate: source.dueDate ? dateKey(date) : null,
+          status: "pending",
+        });
+      };
+
+      if (recurrence === "weekly") {
+        const occurrence = new Date(sourceDate);
+        while (occurrence <= lastDay) {
+          addOccurrence(new Date(occurrence));
+          occurrence.setDate(occurrence.getDate() + 7);
+        }
+      } else if (recurrence === "yearly") {
+        const day = Math.min(
+          sourceDate.getDate(),
+          daysInMonth(year, sourceDate.getMonth() + 1),
+        );
+        addOccurrence(new Date(year, sourceDate.getMonth(), day));
+      } else {
+        const day = Math.min(sourceDate.getDate(), lastDay.getDate());
+        addOccurrence(new Date(year, monthNumber - 1, day));
+      }
+    });
     return projected;
   }
   const inMonth = [
