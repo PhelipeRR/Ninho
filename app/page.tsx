@@ -2464,7 +2464,12 @@ function BudgetView({
     setBudgetModal(true);
   }
   function edit(t: AppTransaction) {
-    setEditingId(t.id);
+    // Ocorrências geradas de um lançamento recorrente não existem como
+    // linhas próprias no banco. Use o ID do lançamento-base ao salvar.
+    const persistedId = t.id.match(
+      /^transaction-recurring-(.+)-\d{4}-\d{2}-\d{2}$/,
+    )?.[1] ?? t.id;
+    setEditingId(persistedId);
     setReceipt(null);
     setForm({
       description: t.description,
@@ -2487,6 +2492,11 @@ function BudgetView({
       return flash("Informe descrição e valor maior que zero.");
     try {
       let id = editingId;
+      if (id?.startsWith("recurring-")) {
+        return flash(
+          "Esta ocorrência vem de um cadastro recorrente. Edite a conta na seção de recorrências.",
+        );
+      }
       if (id) await updateTransaction(id, { ...form, amount: value });
       else {
         const created = await createDetailedTransaction(
